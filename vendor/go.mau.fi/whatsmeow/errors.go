@@ -16,6 +16,7 @@ import (
 
 // Miscellaneous errors
 var (
+	ErrClientIsNil     = errors.New("client is nil")
 	ErrNoSession       = errors.New("can't encrypt message for device: no signal session established")
 	ErrIQTimedOut      = errors.New("info query timed out")
 	ErrNotConnected    = errors.New("websocket not connected")
@@ -23,6 +24,9 @@ var (
 	ErrMessageTimedOut = errors.New("timed out waiting for message send response")
 
 	ErrAlreadyConnected = errors.New("websocket is already connected")
+
+	ErrPhoneNumberTooShort           = errors.New("phone number too short")
+	ErrPhoneNumberIsNotInternational = errors.New("international phone number required (must not start with 0)")
 
 	ErrQRAlreadyConnected = errors.New("GetQRChannel must be called before connecting")
 	ErrQRStoreContainsID  = errors.New("GetQRChannel can only be called when there's no user ID in the client's Store")
@@ -124,22 +128,27 @@ func (dhe DownloadHTTPError) Is(other error) bool {
 
 // Some errors that Client.Download can return
 var (
-	ErrMediaDownloadFailedWith403 = DownloadHTTPError{Response: &http.Response{StatusCode: 403}}
-	ErrMediaDownloadFailedWith404 = DownloadHTTPError{Response: &http.Response{StatusCode: 404}}
-	ErrMediaDownloadFailedWith410 = DownloadHTTPError{Response: &http.Response{StatusCode: 410}}
-	ErrNoURLPresent               = errors.New("no url present")
-	ErrFileLengthMismatch         = errors.New("file length does not match")
-	ErrTooShortFile               = errors.New("file too short")
-	ErrInvalidMediaHMAC           = errors.New("invalid media hmac")
-	ErrInvalidMediaEncSHA256      = errors.New("hash of media ciphertext doesn't match")
-	ErrInvalidMediaSHA256         = errors.New("hash of media plaintext doesn't match")
-	ErrUnknownMediaType           = errors.New("unknown media type")
-	ErrNothingDownloadableFound   = errors.New("didn't find any attachments in message")
+	ErrMediaDownloadFailedWith403    = DownloadHTTPError{Response: &http.Response{StatusCode: 403}}
+	ErrMediaDownloadFailedWith404    = DownloadHTTPError{Response: &http.Response{StatusCode: 404}}
+	ErrMediaDownloadFailedWith410    = DownloadHTTPError{Response: &http.Response{StatusCode: 410}}
+	ErrNoURLPresent                  = errors.New("no url present")
+	ErrTooShortFile                  = errors.New("file too short")
+	ErrInvalidMediaHMAC              = errors.New("invalid media hmac")
+	ErrInvalidMediaEncSHA256         = errors.New("hash of media ciphertext doesn't match")
+	ErrInvalidMediaSHA256            = errors.New("hash of media plaintext doesn't match")
+	ErrInvalidUnencryptedMediaSHA256 = errors.New("hash of unencrypted media doesn't match")
+	ErrUnknownMediaType              = errors.New("unknown media type")
+	ErrNothingDownloadableFound      = errors.New("didn't find any attachments in message")
+
+	// Deprecated: this is no longer returned anywhere
+	ErrFileLengthMismatch = errors.New("file length does not match")
 )
 
 var (
 	ErrOriginalMessageSecretNotFound = errors.New("original message secret key not found")
 	ErrNotEncryptedReactionMessage   = errors.New("given message isn't an encrypted reaction message")
+	ErrNotEncryptedCommentMessage    = errors.New("given message isn't an encrypted comment message")
+	ErrNotSecretEncryptedMessage     = errors.New("given message isn't a secret encrypted message")
 	ErrNotPollUpdateMessage          = errors.New("given message isn't a poll update message")
 )
 
@@ -183,6 +192,7 @@ var (
 	ErrIQGone                error = &IQError{Code: 410, Text: "gone"}
 	ErrIQResourceLimit       error = &IQError{Code: 419, Text: "resource-limit"}
 	ErrIQLocked              error = &IQError{Code: 423, Text: "locked"}
+	ErrIQRateOverLimit       error = &IQError{Code: 429, Text: "rate-overlimit"}
 	ErrIQInternalServerError error = &IQError{Code: 500, Text: "internal-server-error"}
 	ErrIQServiceUnavailable  error = &IQError{Code: 503, Text: "service-unavailable"}
 	ErrIQPartialServerError  error = &IQError{Code: 530, Text: "partial-server-error"}
@@ -204,9 +214,9 @@ func parseIQError(node *waBinary.Node) error {
 func (iqe *IQError) Error() string {
 	if iqe.Code == 0 {
 		if iqe.ErrorNode != nil {
-			return fmt.Sprintf("info query returned unknown error: %s", iqe.ErrorNode.XMLString())
+			return fmt.Sprintf("info query returned unknown error: %s", iqe.ErrorNode)
 		} else if iqe.RawNode != nil {
-			return fmt.Sprintf("info query returned unexpected response: %s", iqe.RawNode.XMLString())
+			return fmt.Sprintf("info query returned unexpected response: %s", iqe.RawNode)
 		} else {
 			return "unknown info query error"
 		}
@@ -221,7 +231,7 @@ func (iqe *IQError) Is(other error) bool {
 	} else if iqe.Code != 0 && otherIQE.Code != 0 {
 		return otherIQE.Code == iqe.Code && otherIQE.Text == iqe.Text
 	} else if iqe.ErrorNode != nil && otherIQE.ErrorNode != nil {
-		return iqe.ErrorNode.XMLString() == otherIQE.ErrorNode.XMLString()
+		return iqe.ErrorNode.String() == otherIQE.ErrorNode.String()
 	} else {
 		return false
 	}

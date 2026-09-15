@@ -2,9 +2,10 @@ syntax = "proto2";
 package WAWebProtobufsHistorySync;
 option go_package = "go.mau.fi/whatsmeow/proto/waHistorySync";
 
-import "waSyncAction/WASyncAction.proto";
-import "waChatLockSettings/WAProtobufsChatLockSettings.proto";
+import "waSyncAction/WAWebProtobufSyncAction.proto";
+import "waChatLockSettings/WAWebProtobufsChatLockSettings.proto";
 import "waE2E/WAWebProtobufsE2E.proto";
+import "waCommon/WACommon.proto";
 import "waWeb/WAWebProtobufsWeb.proto";
 
 enum MediaVisibility {
@@ -46,17 +47,30 @@ message HistorySync {
 	optional uint32 threadDsTimeframeOffset = 10;
 	repeated StickerMetadata recentStickers = 11;
 	repeated PastParticipants pastParticipants = 12;
-	repeated WASyncAction.CallLogRecord callLogRecords = 13;
+	repeated WAWebProtobufSyncAction.CallLogRecord callLogRecords = 13;
 	optional BotAIWaitListState aiWaitListState = 14;
 	repeated PhoneNumberToLIDMapping phoneNumberToLidMappings = 15;
 	optional string companionMetaNonce = 16;
+	optional bytes shareableChatIdentifierEncryptionKey = 17;
+	repeated Account accounts = 18;
+	optional bytes nctSalt = 19;
+	repeated InlineContact inlineContacts = 20;
+	optional bool inlineContactsProvided = 21;
 }
 
 message Conversation {
+	enum GroupAppealStatus {
+		NO_APPEAL = 0;
+		APPEAL_IN_REVIEW = 1;
+		APPEAL_APPROVED = 2;
+		APPEAL_REJECTED = 3;
+	}
+
 	enum EndOfHistoryTransferType {
 		COMPLETE_BUT_MORE_MESSAGES_REMAIN_ON_PRIMARY = 0;
 		COMPLETE_AND_NO_MORE_MESSAGE_REMAIN_ON_PRIMARY = 1;
 		COMPLETE_ON_DEMAND_SYNC_BUT_MORE_MSG_REMAIN_ON_PRIMARY = 2;
+		COMPLETE_ON_DEMAND_SYNC_WITH_MORE_MSG_ON_PRIMARY_BUT_NO_ACCESS = 3;
 	}
 
 	required string ID = 1;
@@ -107,6 +121,22 @@ message Conversation {
 	optional bool locked = 46;
 	optional PrivacySystemMessage systemMessageToInsert = 47;
 	optional bool capiCreatedGroup = 48;
+	optional string accountLid = 49;
+	optional bool limitSharing = 50;
+	optional int64 limitSharingSettingTimestamp = 51;
+	optional WACommon.LimitSharing.Trigger limitSharingTrigger = 52;
+	optional bool limitSharingInitiatedByMe = 53;
+	optional bool maibaAiThreadEnabled = 54;
+	optional bool isMarketingMessageThread = 55;
+	optional bool isSenderNewAccount = 56;
+	optional uint32 afterReadDuration = 57;
+	optional bool isSenderSuspicious = 58;
+	optional GroupAppealStatus appealStatus = 59;
+	optional uint64 appealUpdateTime = 60;
+	optional string authAgentParentCompanyName = 61;
+	optional string authAgentObaPhoneNumber = 62;
+	optional IdentityVerificationState identityVerification = 63;
+	optional WACommon.ACP2Setting acp2Setting = 64;
 }
 
 message GroupParticipant {
@@ -118,6 +148,7 @@ message GroupParticipant {
 
 	required string userJID = 1;
 	optional Rank rank = 2;
+	optional WAWebProtobufsE2E.MemberLabel memberLabel = 3;
 }
 
 message PastParticipant {
@@ -131,9 +162,29 @@ message PastParticipant {
 	optional uint64 leaveTS = 3;
 }
 
+message IdentityVerificationState {
+	optional bool verified = 1;
+	optional uint64 actionSeq = 2;
+}
+
 message PhoneNumberToLIDMapping {
 	optional string pnJID = 1;
 	optional string lidJID = 2;
+}
+
+message InlineContact {
+	optional string pnJID = 1;
+	optional string lidJID = 2;
+	optional string fullName = 3;
+	optional string firstName = 4;
+	optional string username = 5;
+}
+
+message Account {
+	optional string lid = 1;
+	optional string username = 2;
+	optional string countryCode = 3;
+	optional bool isUsernameDeleted = 4;
 }
 
 message HistorySyncMsg {
@@ -149,6 +200,7 @@ message Pushname {
 message WallpaperSettings {
 	optional string filename = 1;
 	optional uint32 opacity = 2;
+	optional bool isGenAi = 3;
 }
 
 message GlobalSettings {
@@ -170,7 +222,8 @@ message GlobalSettings {
 	optional int32 photoQualityMode = 16;
 	optional NotificationSettings individualNotificationSettings = 17;
 	optional NotificationSettings groupNotificationSettings = 18;
-	optional WAProtobufsChatLockSettings.ChatLockSettings chatLockSettings = 19;
+	optional WAWebProtobufsChatLockSettings.ChatLockSettings chatLockSettings = 19;
+	optional int64 chatDbLidMigrationTimestamp = 20;
 }
 
 message AutoDownloadSettings {
@@ -193,6 +246,8 @@ message StickerMetadata {
 	optional float weight = 10;
 	optional int64 lastStickerSentTS = 11;
 	optional bool isLottie = 12;
+	optional string imageHash = 13;
+	optional bool isAvatarSticker = 14;
 }
 
 message PastParticipants {

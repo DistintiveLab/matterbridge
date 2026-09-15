@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"go.mau.fi/util/random"
 
@@ -89,7 +90,7 @@ func (cli *Client) Upload(ctx context.Context, plaintext []byte, appInfo MediaTy
 	dataHash := sha256.Sum256(dataToUpload)
 	resp.FileEncSHA256 = dataHash[:]
 
-	err = cli.rawUpload(ctx, bytes.NewReader(dataToUpload), resp.FileEncSHA256, appInfo, false, &resp)
+	err = cli.rawUpload(ctx, bytes.NewReader(dataToUpload), uint64(len(dataToUpload)), resp.FileEncSHA256, appInfo, false, &resp)
 	return
 }
 
@@ -98,6 +99,8 @@ func (cli *Client) Upload(ctx context.Context, plaintext []byte, appInfo MediaTy
 // This is otherwise identical to [Upload], but it reads the plaintext from an [io.Reader] instead of a byte slice.
 // A temporary file is required for the encryption process. If tempFile is nil, a temporary file will be created
 // and deleted after the upload.
+//
+// To use only one file, pass the same file as both plaintext and tempFile. This will cause the file to be overwritten with encrypted data.
 func (cli *Client) UploadReader(ctx context.Context, plaintext io.Reader, tempFile io.ReadWriteSeeker, appInfo MediaType) (resp UploadResponse, err error) {
 	resp.MediaKey = random.Bytes(32)
 	iv, cipherKey, macKey, _ := getMediaKeys(resp.MediaKey, appInfo)
@@ -113,7 +116,8 @@ func (cli *Client) UploadReader(ctx context.Context, plaintext io.Reader, tempFi
 			_ = os.Remove(tempFileFile.Name())
 		}()
 	}
-	resp.FileSHA256, resp.FileEncSHA256, resp.FileLength, err = cbcutil.EncryptStream(cipherKey, iv, macKey, plaintext, tempFile)
+	var uploadSize uint64
+	resp.FileSHA256, resp.FileEncSHA256, resp.FileLength, uploadSize, err = cbcutil.EncryptStream(cipherKey, iv, macKey, plaintext, tempFile)
 	if err != nil {
 		err = fmt.Errorf("failed to encrypt file: %w", err)
 		return
@@ -123,7 +127,7 @@ func (cli *Client) UploadReader(ctx context.Context, plaintext io.Reader, tempFi
 		err = fmt.Errorf("failed to seek to start of temporary file: %w", err)
 		return
 	}
-	err = cli.rawUpload(ctx, tempFile, resp.FileEncSHA256, appInfo, false, &resp)
+	err = cli.rawUpload(ctx, tempFile, uploadSize, resp.FileEncSHA256, appInfo, false, &resp)
 	return
 }
 
@@ -161,7 +165,7 @@ func (cli *Client) UploadNewsletter(ctx context.Context, data []byte, appInfo Me
 	resp.FileLength = uint64(len(data))
 	hash := sha256.Sum256(data)
 	resp.FileSHA256 = hash[:]
-	err = cli.rawUpload(ctx, bytes.NewReader(data), resp.FileSHA256, appInfo, true, &resp)
+	err = cli.rawUpload(ctx, bytes.NewReader(data), resp.FileLength, resp.FileSHA256, appInfo, true, &resp)
 	return
 }
 
@@ -174,6 +178,10 @@ func (cli *Client) UploadNewsletterReader(ctx context.Context, data io.ReadSeeke
 	hasher := sha256.New()
 	var fileLength int64
 	fileLength, err = io.Copy(hasher, data)
+	if err != nil {
+		err = fmt.Errorf("failed to hash data: %w", err)
+		return
+	}
 	resp.FileLength = uint64(fileLength)
 	resp.FileSHA256 = hasher.Sum(nil)
 	_, err = data.Seek(0, io.SeekStart)
@@ -181,12 +189,12 @@ func (cli *Client) UploadNewsletterReader(ctx context.Context, data io.ReadSeeke
 		err = fmt.Errorf("failed to seek to start of data: %w", err)
 		return
 	}
-	err = cli.rawUpload(ctx, data, resp.FileSHA256, appInfo, true, &resp)
+	err = cli.rawUpload(ctx, data, resp.FileLength, resp.FileSHA256, appInfo, true, &resp)
 	return
 }
 
-func (cli *Client) rawUpload(ctx context.Context, dataToUpload io.Reader, fileHash []byte, appInfo MediaType, newsletter bool, resp *UploadResponse) error {
-	mediaConn, err := cli.refreshMediaConn(false)
+func (cli *Client) rawUpload(ctx context.Context, dataToUpload io.Reader, uploadSize uint64, fileHash []byte, appInfo MediaType, newsletter bool, resp *UploadResponse) error {
+	mediaConn, err := cli.refreshMediaConn(ctx, false)
 	if err != nil {
 		return fmt.Errorf("failed to refresh media connections: %w", err)
 	}
@@ -229,16 +237,73 @@ func (cli *Client) rawUpload(ctx context.Context, dataToUpload io.Reader, fileHa
 		return fmt.Errorf("failed to prepare request: %w", err)
 	}
 
+	req.ContentLength = int64(uploadSize)
 	req.Header.Set("Origin", socket.Origin)
 	req.Header.Set("Referer", socket.Origin+"/")
 
-	httpResp, err := cli.http.Do(req)
+	httpResp, err := cli.mediaHTTP.Do(req)
 	if err != nil {
 		err = fmt.Errorf("failed to execute request: %w", err)
 	} else if httpResp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("upload failed with status code %d", httpResp.StatusCode)
 	} else if err = json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
 		err = fmt.Errorf("failed to parse upload response: %w", err)
+	}
+	if httpResp != nil {
+		_ = httpResp.Body.Close()
+	}
+	return err
+}
+
+// DeleteMedia deletes the media at the given direct path from WhatsApp servers.
+//
+// This is only used for things like history syncs, which should be deleted after processing.
+func (cli *Client) DeleteMedia(ctx context.Context, appInfo MediaType, directPath string, encFileHash []byte, encHandle string) error {
+	if directPath == "" {
+		return nil
+	}
+	mediaConn, err := cli.refreshMediaConn(ctx, false)
+	if err != nil {
+		return fmt.Errorf("failed to refresh media connections: %w", err)
+	}
+
+	queryStart := strings.IndexByte(directPath, '?')
+	if queryStart > 0 {
+		directPath = directPath[:queryStart]
+	}
+
+	token := base64.URLEncoding.EncodeToString(encFileHash)
+	query := url.Values{
+		"token": []string{token},
+		"d_md":  []string{base64.RawURLEncoding.EncodeToString([]byte(directPath))},
+		"auth":  []string{mediaConn.Auth},
+	}
+	if encHandle != "" {
+		query.Set("e_handle", encHandle)
+	}
+	deleteURL := url.URL{
+		Scheme:   "https",
+		Host:     mediaConn.Hosts[0].Hostname,
+		Path:     fmt.Sprintf("/mms/%s/%s", mediaTypeToMMSType[appInfo], token),
+		RawQuery: query.Encode(),
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to prepare request: %w", err)
+	}
+
+	req.Header.Set("Origin", socket.Origin)
+	req.Header.Set("Referer", socket.Origin+"/")
+	if cmn := cli.Store.CompanionMetaNonce; cmn != "" && encHandle != "" {
+		req.Header.Set("Companion_User_Secret", cli.Store.CompanionMetaNonce)
+	}
+
+	httpResp, err := cli.mediaHTTP.Do(req)
+	if err != nil {
+		err = fmt.Errorf("failed to execute request: %w", err)
+	} else if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+		err = fmt.Errorf("media delete failed with status code %d", httpResp.StatusCode)
 	}
 	if httpResp != nil {
 		_ = httpResp.Body.Close()

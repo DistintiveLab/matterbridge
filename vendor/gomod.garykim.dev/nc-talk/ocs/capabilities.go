@@ -14,6 +14,12 @@
 
 package ocs
 
+import (
+       "bytes"
+       "encoding/json"
+       "fmt"
+)
+
 // Capabilities describes the response from the capabilities request
 type Capabilities struct {
 	ocs
@@ -22,6 +28,56 @@ type Capabilities struct {
 			SpreedCapabilities SpreedCapabilities `json:"spreed"`
 		} `json:"capabilities"`
 	} `json:"data"`
+}
+
+// UnmarshalJSON accepts both the legacy object form of ocs.data and the
+// array form returned by Nextcloud 33+.
+func (c *Capabilities) UnmarshalJSON(data []byte) error {
+       type dataShape struct {
+               Capabilities struct {
+                       SpreedCapabilities SpreedCapabilities `json:"spreed"`
+               } `json:"capabilities"`
+       }
+
+       var raw struct {
+               OCSMeta ocsMeta         `json:"meta"`
+               Data    json.RawMessage `json:"data"`
+       }
+       if err := json.Unmarshal(data, &raw); err != nil {
+               return err
+       }
+       c.ocs.OCSMeta = raw.OCSMeta
+
+       trimmed := bytes.TrimSpace(raw.Data)
+       if len(trimmed) == 0 {
+               return nil
+       }
+
+       switch trimmed[0] {
+       case '{':
+               var d dataShape
+               if err := json.Unmarshal(trimmed, &d); err != nil {
+                       return err
+               }
+               c.Data = d
+       case '[':
+               var arr []dataShape
+               if err := json.Unmarshal(trimmed, &arr); err != nil {
+                       return err
+               }
+               for _, d := range arr {
+                       if len(d.Capabilities.SpreedCapabilities.Features) > 0 {
+                               c.Data = d
+                               break
+                       }
+               }
+               if c.Data.Capabilities.SpreedCapabilities.Features == nil && len(arr) > 0 {
+                       c.Data = arr[0]
+               }
+       default:
+               return fmt.Errorf("capabilities data is neither an object nor an array")
+       }
+       return nil
 }
 
 // SpreedCapabilities describes the Nextcloud Talk capabilities response
