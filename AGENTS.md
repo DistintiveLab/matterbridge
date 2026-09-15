@@ -22,7 +22,7 @@ go build -mod=vendor -ldflags "-X github.com/42wim/matterbridge/version.GitHash=
 
 ### Lint
 
-CI runs golangci-lint with `--new-from-rev HEAD~5 --timeout=5m` (only issues introduced in the last 5 commits fail). Config is `.golangci.yaml`; `gateway/bridgemap` is excluded from linting. The config uses `enable-all` with a long disable list.
+CI runs golangci-lint (pinned v2.13.2, config format v2) with `--new-from-rev HEAD~5 --timeout=5m` (only issues introduced in the last 5 commits fail). Config is `.golangci.yaml`; `gateway/bridgemap` is excluded from linting. The config uses `default: all` with a long disable list.
 
 ### Build tags (important)
 
@@ -105,8 +105,8 @@ Only a handful of packages have tests: `gateway`, `gateway/samechannel`, `bridge
 - **Don't send to the origin channel**: `Gateway.SendMessage` skips the channel the message came from; avatar-download events are inverted (only sent to origin). Preserve this when touching routing.
 - **Message ID caching is edit/delete machinery**: bridges that support edits return the new message ID from `Send()`; the gateway stores mappings so later edit/delete events can fan out. Changes here affect `EventMsgDelete`/edit propagation.
 - **Debug logging**: `DEBUG=1` env var is equivalent to `-debug` and enables caller info in logs.
-- **CI Go version is 1.22.x** (`.github/workflows/development.yml`); avoid stdlib/features newer than that.
-- **golangci-lint config is dated** (uses `deadline`, `golint`, etc.); CI pins nothing (`version: latest`) and relies on `--new-from-rev` to only flag new code. Expect noise if running the full lint locally.
+- **CI Go version is 1.26.x** (`.github/workflows/development.yml`), matching the `go 1.26.0` directive in go.mod (required by whatsmeow). Avoid stdlib/features newer than that.
+- **golangci-lint**: config is v2 format; the pinned CI version must be built with a Go >= the module's `go` directive or linting fails hard.
 - Leftover runtime artifacts may appear in the repo root (e.g. `session-*.gob.db`, `codigoqr.txt`) - these are WhatsApp session files created by running the binary locally, not source.
 - The `api` "protocol" (`bridge/api`) exposes a REST/WebSocket interface to inject/extract messages; `apiProtocol = "api"` gets special-casing in gateway message modification.
 - `MattermostPlugin` channel on the Router is for running matterbridge as a Mattermost plugin (messages routed outside the normal bridge flow).
