@@ -48,6 +48,7 @@ linters:
     - decorder
     - maintidx
     - exhaustruct
+    - exhaustruct_v5
     - asasalint
     - exhaustive
     - testifylint

@@ -75,6 +75,7 @@ func (b *Btalk) JoinChannel(channel config.ChannelInfo) error {
 		return fmt.Errorf("cannot join room %s: %w", channel.Name, err)
 	}
 	b.rooms = append(b.rooms, newRoom)
+	b.Log.Infof("%s: joined %s", b.Account, channel.Name)
 
 	go func() {
 		for msg := range c {
@@ -82,6 +83,14 @@ func (b *Btalk) JoinChannel(channel config.ChannelInfo) error {
 
 			if msg.Error != nil {
 				b.Log.Errorf("Fatal message poll error: %s\n", msg.Error)
+				b.Log.Infof("%s: asking to reconnect after losing %s", b.Account, channel.Name)
+				b.Remote <- config.Message{
+					Username: "system",
+					Text:     "reconnect",
+					Channel:  channel.Name,
+					Account:  b.Account,
+					Event:    config.EventFailure,
+				}
 
 				return
 			}
