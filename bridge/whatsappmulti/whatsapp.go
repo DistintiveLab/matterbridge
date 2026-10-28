@@ -142,23 +142,33 @@ func (b *Bwhatsapp) Connect() error {
 		}
 	}
 
-	// get user avatar asynchronously
-	b.Log.Info("Getting user avatars..")
-
+	// get user avatar asynchronously, one lookup per contact takes long enough to
+	// stall the startup of every other bridge if done inline
+	jids := make([]string, 0, len(b.users))
 	for jid := range b.users {
-		info, err := b.GetProfilePicThumb(jid)
-		if err != nil {
-			b.Log.Warnf("Could not get profile photo of %s: %v", jid, err)
-		} else {
-			b.Lock()
-			if info != nil {
-				b.userAvatars[jid] = info.URL
-			}
-			b.Unlock()
-		}
+		jids = append(jids, jid)
 	}
 
-	b.Log.Info("Finished getting avatars..")
+	go func() {
+		b.Log.Info("Getting user avatars..")
+
+		for _, jid := range jids {
+			info, err := b.GetProfilePicThumb(jid)
+			if err != nil {
+				b.Log.Warnf("Could not get profile photo of %s: %v", jid, err)
+
+				continue
+			}
+			if info == nil {
+				continue
+			}
+			b.Lock()
+			b.userAvatars[jid] = info.URL
+			b.Unlock()
+		}
+
+		b.Log.Info("Finished getting avatars..")
+	}()
 
 	return nil
 }
