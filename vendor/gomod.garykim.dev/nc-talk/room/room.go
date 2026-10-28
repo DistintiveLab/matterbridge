@@ -17,6 +17,7 @@ package room
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -104,8 +105,8 @@ func (t *TalkRoom) SendComplexMessage(msg *Message) (*ocs.TalkRoomMessageData, e
 	if err != nil {
 		return nil, err
 	}
-	if res.StatusCode() != 201 {
-		return nil, ErrUnexpectedReturnCode
+	if res.StatusCode() != http.StatusCreated {
+		return nil, fmt.Errorf("%w: %s", ErrUnexpectedReturnCode, ocs.StatusDetail(res.StatusCode(), res.Data))
 	}
 	msgInfo, err := ocs.TalkRoomSentResponseUnmarshal(&res.Data)
 	if err != nil {
@@ -138,7 +139,7 @@ func (t *TalkRoom) DeleteMessage(messageID int) (*ocs.TalkRoomMessageData, error
 		return nil, err
 	}
 	if res.StatusCode() != http.StatusOK && res.StatusCode() != http.StatusAccepted {
-		return nil, ErrUnexpectedReturnCode
+		return nil, fmt.Errorf("%w: %s", ErrUnexpectedReturnCode, ocs.StatusDetail(res.StatusCode(), res.Data))
 	}
 	msgInfo, err := ocs.TalkRoomSentResponseUnmarshal(&res.Data)
 	if err != nil {
@@ -262,6 +263,12 @@ func (t *TalkRoom) TestConnection() error {
 		return ErrRoomNotFound
 	case http.StatusPreconditionFailed:
 		return ErrNotModeratorInLobby
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
+	case http.StatusForbidden:
+		return ErrForbidden
+	case http.StatusTooManyRequests:
+		return ErrTooManyRequests
 	}
-	return ErrUnexpectedReturnCode
+	return fmt.Errorf("%w: %s", ErrUnexpectedReturnCode, ocs.StatusDetail(res.StatusCode(), res.Data))
 }

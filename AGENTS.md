@@ -99,6 +99,15 @@ The Router also handles control events routed as messages: `EventFailure` (trigg
 
 Only a handful of packages have tests: `gateway`, `gateway/samechannel`, `bridge/helper`, `bridge/discord`, `bridge/slack`, `bridge/matrix`. There is no mocking framework for protocol APIs; bridge tests cover pure helpers. Gateway tests (`gateway/gateway_test.go`) exercise routing logic with fake bridges.
 
+## Troubleshooting nctalk
+
+The Nextcloud Talk bridge talks to `/ocs/v2.php/apps/spreed/api/v1/chat/{token}`. Talk has kept that endpoint stable, so the usual failure is not an API version bump.
+
+- **`Bridge nctalk.X failed to join channel: unexpected return code`** - the chat endpoint returned a status other than 200/304/404/412. The most common one is `401 Unauthorized`, i.e. a wrong, expired, or revoked app password. Recreate it in Nextcloud (Settings -> Security -> Devices & sessions -> "Create new app password"), then update `[nctalk.<account>] Password=`. Nextcloud may also have basic auth with the login password disabled outright, which makes the app password mandatory.
+- **`cannot get capabilities: 401 Unauthorized: {"ocs": ...}`** - credentials are rejected before any room is touched. The OCS body (`statuscode` 997, "Unauthorised") confirms it is authentication, not routing.
+- **Verify the host first.** The configured `Server` must point at the instance that actually hosts the room; an unreachable or renamed hostname produces the same generic message.
+- **nc-talk dependency.** Upstream `gomod.garykim.dev/nc-talk` is unmaintained and only at `v0.3.0`; errors surface as bare status codes. The repo pins the maintained fork via `replace` in `go.mod` (`DistintiveLab/go-nc-talk v0.3.2` or newer), which handles Nextcloud's `ocs.data` sometimes being a JSON array instead of an object (empty rooms, Nextcloud 33 behaviour) and reports HTTP status plus response body in errors. Bump that `replace` and re-run `go mod vendor` when fixing nctalk API issues; do not try to bump the upstream requirement.
+
 ## Gotchas
 
 - **Vendor dir is committed.** After changing `go.mod`, run `go mod vendor` and commit the vendor diff, otherwise `-mod=vendor` builds fail.

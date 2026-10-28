@@ -3,6 +3,7 @@ package nctalk
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -41,12 +42,12 @@ func (b *Btalk) Connect() error {
 	b.user, err = user.NewUser(b.GetString("Server"), b.GetString("Login"), b.GetString("Password"), tconfig)
 	if err != nil {
 		b.Log.Error("Config could not be used")
-		return err
+		return fmt.Errorf("cannot reach Nextcloud at %s: %w", b.GetString("Server"), err)
 	}
 	_, err = b.user.Capabilities()
 	if err != nil {
 		b.Log.Error("Cannot Connect")
-		return err
+		return fmt.Errorf("cannot connect as %s to %s: %w", b.GetString("Login"), b.GetString("Server"), err)
 	}
 	b.Log.Info("Connected")
 	return nil
@@ -70,7 +71,8 @@ func (b *Btalk) JoinChannel(channel config.ChannelInfo) error {
 	newRoom.ctx, newRoom.ctxCancel = context.WithCancel(context.Background())
 	c, err := newRoom.room.ReceiveMessages(newRoom.ctx)
 	if err != nil {
-		return err
+		newRoom.ctxCancel()
+		return fmt.Errorf("cannot join room %s: %w", channel.Name, err)
 	}
 	b.rooms = append(b.rooms, newRoom)
 

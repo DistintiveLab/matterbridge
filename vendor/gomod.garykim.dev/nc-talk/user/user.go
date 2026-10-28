@@ -18,6 +18,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -200,16 +201,23 @@ func (t *TalkUser) GetRooms() (*[]RoomInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	if res.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("cannot list rooms: %s", ocs.StatusDetail(res.StatusCode(), res.Data))
+	}
 
 	var roomsRequest struct {
 		OCS struct {
-			Data []RoomInfo `json:"data"`
+			OCSMeta ocs.OCSMeta `json:"meta"`
+			Data    []RoomInfo  `json:"data"`
 		} `json:"ocs"`
 	}
 
 	err = json.Unmarshal(res.Data, &roomsRequest)
 	if err != nil {
 		return nil, err
+	}
+	if code := roomsRequest.OCS.OCSMeta.StatusCode; code != 0 && code != ocs.StatusOK {
+		return nil, fmt.Errorf("cannot list rooms: %s", ocs.OCSStatusDetail(code, roomsRequest.OCS.OCSMeta.Message))
 	}
 
 	return &roomsRequest.OCS.Data, nil
@@ -228,6 +236,9 @@ func (t *TalkUser) Capabilities() (*Capabilities, error) {
 	if err != nil {
 		return nil, err
 	}
+	if res.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("cannot get capabilities: %s", ocs.StatusDetail(res.StatusCode(), res.Data))
+	}
 
 	capabilitiesRequest := &struct {
 		Ocs ocs.Capabilities `json:"ocs"`
@@ -236,6 +247,10 @@ func (t *TalkUser) Capabilities() (*Capabilities, error) {
 	err = json.Unmarshal(res.Data, capabilitiesRequest)
 	if err != nil {
 		return nil, err
+	}
+
+	if code := capabilitiesRequest.Ocs.OCSMeta.StatusCode; code != 0 && code != ocs.StatusOK {
+		return nil, fmt.Errorf("cannot get capabilities: %s", ocs.OCSStatusDetail(code, capabilitiesRequest.Ocs.OCSMeta.Message))
 	}
 
 	sc := capabilitiesRequest.Ocs.Data.Capabilities.SpreedCapabilities

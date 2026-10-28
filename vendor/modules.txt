@@ -694,7 +694,7 @@ golang.org/x/text/width
 # golang.org/x/time v0.5.0
 ## explicit; go 1.18
 golang.org/x/time/rate
-# gomod.garykim.dev/nc-talk v0.3.0 => github.com/DistintiveLab/go-nc-talk v0.3.1
+# gomod.garykim.dev/nc-talk v0.3.0 => github.com/DistintiveLab/go-nc-talk v0.3.2
 ## explicit; go 1.13
 gomod.garykim.dev/nc-talk/constants
 gomod.garykim.dev/nc-talk/ocs
@@ -872,4 +872,4 @@ modernc.org/token
 rsc.io/qr
 rsc.io/qr/coding
 rsc.io/qr/gf256
-# gomod.garykim.dev/nc-talk => github.com/DistintiveLab/go-nc-talk v0.3.1
+# gomod.garykim.dev/nc-talk => github.com/DistintiveLab/go-nc-talk v0.3.2
