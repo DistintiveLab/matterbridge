@@ -58,3 +58,14 @@ func OCSStatusDetail(statusCode int, message string) string {
 	}
 	return fmt.Sprintf("OCS status %d: %s", statusCode, message)
 }
+
+// Failed reports whether the OCS metadata describes an unsuccessful request.
+// The status string is the authoritative signal: OCS v1.2 documents 100 as the
+// success code, but Nextcloud returns 200 for several endpoints (for example
+// cloud/capabilities), so the numeric code alone cannot be trusted.
+func (m OCSMeta) Failed() bool {
+	if m.Status != "" {
+		return !strings.EqualFold(m.Status, "ok")
+	}
+	return m.StatusCode != 0 && m.StatusCode != StatusOK && m.StatusCode != http.StatusOK
+}

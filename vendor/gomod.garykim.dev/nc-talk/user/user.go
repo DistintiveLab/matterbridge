@@ -216,8 +216,8 @@ func (t *TalkUser) GetRooms() (*[]RoomInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if code := roomsRequest.OCS.OCSMeta.StatusCode; code != 0 && code != ocs.StatusOK {
-		return nil, fmt.Errorf("cannot list rooms: %s", ocs.OCSStatusDetail(code, roomsRequest.OCS.OCSMeta.Message))
+	if meta := roomsRequest.OCS.OCSMeta; meta.Failed() {
+		return nil, fmt.Errorf("cannot list rooms: %s", ocs.OCSStatusDetail(meta.StatusCode, meta.Message))
 	}
 
 	return &roomsRequest.OCS.Data, nil
@@ -249,8 +249,8 @@ func (t *TalkUser) Capabilities() (*Capabilities, error) {
 		return nil, err
 	}
 
-	if code := capabilitiesRequest.Ocs.OCSMeta.StatusCode; code != 0 && code != ocs.StatusOK {
-		return nil, fmt.Errorf("cannot get capabilities: %s", ocs.OCSStatusDetail(code, capabilitiesRequest.Ocs.OCSMeta.Message))
+	if meta := capabilitiesRequest.Ocs.OCSMeta; meta.Failed() {
+		return nil, fmt.Errorf("cannot get capabilities: %s", ocs.OCSStatusDetail(meta.StatusCode, meta.Message))
 	}
 
 	sc := capabilitiesRequest.Ocs.Data.Capabilities.SpreedCapabilities

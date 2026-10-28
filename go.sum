@@ -18,8 +18,8 @@ github.com/Benau/tgsconverter v0.0.0-20210809170556-99f4a4f6337f/go.mod h1:AQiQK
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
-github.com/DistintiveLab/go-nc-talk v0.3.2 h1:VaBFxYlV7AeRLxjnjWcVAor9Gq/jUGF/apgP9Otziok=
-github.com/DistintiveLab/go-nc-talk v0.3.2/go.mod h1:AA2PJhdfipKNvUZIRAfRI8WuZ/0UrV7a3VdaUF9LPTY=
+github.com/DistintiveLab/go-nc-talk v0.3.3 h1:RFGYKsDdF58C6/T3agOqaCSFeWfR7XvqgMINDd1oNcY=
+github.com/DistintiveLab/go-nc-talk v0.3.3/go.mod h1:AA2PJhdfipKNvUZIRAfRI8WuZ/0UrV7a3VdaUF9LPTY=
 github.com/Jeffail/gabs v1.4.0 h1://5fYRRTq1edjfIrQGvdkcd22pkYUrHZ5YC/H2GJVAo=
 github.com/Jeffail/gabs v1.4.0/go.mod h1:6xMvQMK4k33lb7GUUpaAPh6nKMmemQeg5d4gn7/bOXc=
 github.com/Philipp15b/go-steam v1.0.1-0.20200727090957-6ae9b3c0a560 h1:ItnC9PEEMESzTbFayxrhKBbuFQOXDBI8yy7NudTcEWs=

@@ -155,7 +155,7 @@ require (
 	rsc.io/qr v0.2.0 // indirect
 )
 
-replace gomod.garykim.dev/nc-talk => github.com/DistintiveLab/go-nc-talk v0.3.2
+replace gomod.garykim.dev/nc-talk => github.com/DistintiveLab/go-nc-talk v0.3.3
 
 //replace github.com/matrix-org/gomatrix => github.com/matterbridge/gomatrix v0.0.0-20220205235239-607eb9ee6419
 
