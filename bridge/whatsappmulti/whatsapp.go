@@ -29,6 +29,11 @@ import (
 const (
 	// Account config parameters
 	cfgNumber = "Number"
+
+	// qrPairAttempts is how many batches of QR codes we are willing to show before
+	// giving up. WhatsApp hands out a fixed number of codes per connection and the
+	// whole batch expires after a few minutes.
+	qrPairAttempts = 5
 )
 
 // Bwhatsapp Bridge structure keeping all the information needed for relying
@@ -83,29 +88,10 @@ func (b *Bwhatsapp) Connect() error {
 	b.wc = whatsmeow.NewClient(device, waLog.Stdout("Client", "INFO", true))
 	b.wc.AddEventHandler(b.eventHandler)
 
-	firstlogin := false
-	var qrChan <-chan whatsmeow.QRChannelItem
-	if b.wc.Store.ID == nil {
-		firstlogin = true
-		qrChan, err = b.wc.GetQRChannel(context.Background())
-		if err != nil && !errors.Is(err, whatsmeow.ErrQRStoreContainsID) {
-			return errors.New("failed to to get QR channel:" + err.Error())
-		}
-	}
+	firstlogin := b.wc.Store.ID == nil
 
-	err = b.wc.Connect()
-	if err != nil {
-		return errors.New("failed to connect to WhatsApp: " + err.Error())
-	}
-
-	if b.wc.Store.ID == nil {
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
-			} else {
-				b.Log.Infof("QR channel result: %s", evt.Event)
-			}
-		}
+	if err = b.connectAndPair(firstlogin); err != nil {
+		return err
 	}
 
 	// disconnect and reconnect on our first login/pairing
@@ -118,6 +104,12 @@ func (b *Bwhatsapp) Connect() error {
 		if err != nil {
 			return errors.New("failed to connect to WhatsApp: " + err.Error())
 		}
+	}
+
+	// a store without an ID or without its session stores means the pairing never
+	// finished, so bailing out here is better than dereferencing a nil store below
+	if b.wc.Store.ID == nil || b.wc.Store.Contacts == nil {
+		return errors.New("WhatsApp session is not paired: delete the session file and scan a new QR code")
 	}
 
 	b.Log.Infoln("WhatsApp connection successful")
@@ -171,6 +163,66 @@ func (b *Bwhatsapp) Connect() error {
 	}()
 
 	return nil
+}
+
+// connectAndPair connects the client and, when the store has no registered device yet,
+// blocks until the user pairs by scanning a QR code. Each QR batch expires after a few
+// minutes and the client gets disconnected when it runs out, so on expiry we reconnect
+// and ask for a fresh batch instead of leaving the user with a code that cannot work.
+func (b *Bwhatsapp) connectAndPair(firstlogin bool) error {
+	for attempt := 1; ; attempt++ {
+		var (
+			qrChan <-chan whatsmeow.QRChannelItem
+			err    error
+		)
+
+		if firstlogin {
+			qrChan, err = b.wc.GetQRChannel(context.Background())
+			if err != nil && !errors.Is(err, whatsmeow.ErrQRStoreContainsID) {
+				return errors.New("failed to get QR channel:" + err.Error())
+			}
+
+			if qrChan != nil {
+				b.Log.Infof("Waiting for the QR code to be scanned in WhatsApp (Linked devices), attempt %d of %d",
+					attempt, qrPairAttempts)
+			}
+		}
+
+		if err = b.wc.Connect(); err != nil {
+			return errors.New("failed to connect to WhatsApp: " + err.Error())
+		}
+
+		if qrChan == nil {
+			return nil
+		}
+
+		for evt := range qrChan {
+			if evt.Event == whatsmeow.QRChannelEventCode {
+				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
+
+				continue
+			}
+
+			if evt.Error != nil {
+				b.Log.Infof("QR channel result: %s (%v)", evt.Event, evt.Error)
+			} else {
+				b.Log.Infof("QR channel result: %s", evt.Event)
+			}
+		}
+
+		if b.wc.Store.ID != nil {
+			return nil
+		}
+
+		if attempt >= qrPairAttempts {
+			return errors.New("pairing failed: the QR code was not scanned before it expired")
+		}
+
+		b.Log.Infoln("QR code expired, generating a new one")
+
+		b.wc.Disconnect()
+		time.Sleep(time.Second)
+	}
 }
 
 // Disconnect is called while reconnecting to the bridge
